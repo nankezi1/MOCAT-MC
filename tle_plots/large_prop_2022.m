@@ -1,0 +1,43 @@
+close all 
+clear all 
+clc
+global tumin radiusearthkm xke j2 j3 j4 j3oj2
+
+DeltaT=5*24*60;
+time=1441;
+npts=time;
+addpath(genpath(pwd))
+
+%name='well-tracked.txt';
+% name='tle.txt';
+% name='tle_28884_2019.txt';
+% name='Starlink_tle_3line.txt';
+name='all_2022.txt';
+
+%[oe_geos,X_eci,X_ecf,numcat]=load_process_tles(name,time);
+tic;
+[sats,numcat,indx]=load_all_tles_3lines(name,time);toc;
+
+n_sats=length(sats);       
+
+tsince=10:DeltaT:24*60*365;
+n_time=length(tsince);
+
+X_eci=zeros(6,n_time,n_sats);
+
+tic
+deorbit=zeros(n_sats,1);
+for n=1:n_time
+    n_sats=length(sats);       
+    for i=1:n_sats
+        
+        [sats{i}, X_eci_temp, ~,~]=spg4_ecf(sats{i},tsince(n)); %tsince(n) tsince(n)
+        if norm(X_eci_temp(1,:))==0
+            deorbit=1;
+            X_eci(:,n,i)=zeros(6,1);
+        else
+            X_eci(:,n,i)=X_eci_temp;
+        end
+    end
+end
+toc

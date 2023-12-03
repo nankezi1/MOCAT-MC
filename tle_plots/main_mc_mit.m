@@ -1,0 +1,133 @@
+close all;
+clear all;
+clc;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% This code impliments MIT's version of a space enivormental Monte Carlo
+% Simulation 
+% Author: Richard Linares, MIT 08/23/2022
+% All other Authors: add name here...
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+global tumin radiusearthkm xke j2 j3 j4 j3oj2
+DAY2SEC=3600*24;
+maxp = 0;
+
+DeltaT=5*24*60;
+time=1441;
+npts=time;
+CUBE_RES=1000;
+numberOfNonCatastrophicCollisions=0;
+
+addpath(genpath(pwd))
+
+%name='well-tracked.txt';
+% name='tle.txt';
+% name='tle_28884_2019.txt';
+% name='Starlink_tle_3line.txt';
+
+%this file is the initial population, it should include all objects 
+name='all_2022.txt';
+
+tic;
+[sats,numcat,indx]=load_all_tles_3lines(name);
+toc;
+
+[sats]=add_mass_radius(sats);
+
+time0=datetime(sats{1}.jdsatepoch,'convertfrom','juliandate');
+
+n_sats=length(sats);
+
+tsince=10:DeltaT:24*60*365;
+n_time=length(tsince);
+
+X_eci=zeros(6,n_time,n_sats);
+
+tic
+deorbit=zeros(n_sats,1);
+numObjects=zeros(n_time,1);
+
+for n=1:n_time
+    % Propagate until next time
+    n_sats=length(sats);
+    X_eci=zeros(6,n_sats);deorbit=[];
+    for i=1:n_sats
+        [sats{i}, X_eci_temp, ~,~]=spg4_ecf(sats{i},tsince(n)); %tsince(n) tsince(n)
+        if norm(X_eci_temp(1,:))==0
+            deorbit=[deorbit;i];
+            X_eci(:,i)=zeros(6,1);
+        else
+            X_eci(:,i)=X_eci_temp;
+            sats{i}.r=X_eci_temp(1:3,1);
+            sats{i}.v=X_eci_temp(4:6,1);
+        end
+    end
+
+    %Remove all deorbited satellites
+    X_eci(:,deorbit)=[];
+    sats(deorbit,:)=[];
+    n_sats=length(sats);
+
+    %Compute CUBE method
+    res=cube(X_eci, CUBE_RES);
+    res=res(2:end);
+    n_res=length(res);
+
+    for k=1:n_res
+        array=combntns(res{k},2);
+        for m=1:length(array(:,1))
+            p1=sats{array(m,1)};
+            p2=sats{array(m,2)};
+            % probability of collision
+            Pij=collision_prob(p1, p2,CUBE_RES);
+            % probability of collision over 5 days
+            P = Pij*5* DAY2SEC;
+            maxp = max(maxp, P);
+            %print(P)
+            if P > 0
+                dv = norm(p1.v - p2.v);
+                catastrophRatio = (p2.mass * dv^2) / (2 * p1.mass * 1000);
+                LB = 0.05;
+                % if the ratio is smaller than 40 J/g then it is non-catastrophic collision
+                if catastrophRatio > 40
+                    M = p1.mass + p2.mass;
+                    Lc = linspace(LB, 1.);
+                    num = floor(0.1 * M ^(0.75) * LB^(-1.71));
+                else
+                    num = 0;
+                end
+                expectedDebris = P * num;
+                bigEnough = 0;
+                if expectedDebris > 5 % was 1000
+                    bigEnough = 1;
+                end
+                % Monte-carlo simulation - there is a collision if random number is lower than prob of collision
+                if rand < P
+                    dv = norm(p1.v - p2.v);
+                    if p2.mass < p1.mass
+                        catastrophRatio = (p2.mass * dv^2) / (2 * p1.mass * 1000);
+                    else
+                        catastrophRatio = (p1.mass * dv^2) / (2 * p2.mass * 1000);
+                    end
+
+                    if catastrophRatio < 40
+                        numberOfNonCatastrophicCollisions =numberOfNonCatastrophicCollisions+ 1;
+                    else
+                        [debris1, debris2]=breakup(tsince(n), p1, p2);
+                        sats=[sats; debris1;debris2];
+                        if length(debris1)>10 && length(debris2)>10
+                            fprintf('Collision happened, New Debris 1 %i, New Debris 2 %i\n', length(debris1),length(debris2))
+                        end
+                    end
+                end
+            end
+        end
+    end
+    current_time=time0+days(tsince(n)/(24*60));
+    numObjects(n,1)=length(sats);
+    fprintf('Number of Objects %i, Doy %i, year %i\n', numObjects(n,1),day(current_time,'dayofyear'),year(current_time))
+end
+toc
