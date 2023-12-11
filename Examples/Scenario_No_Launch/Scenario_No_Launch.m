@@ -1,8 +1,11 @@
-% try to have a lean version for mc
+% Scenario No Launch
 clc;clear;
-restoredefaultpath;
-addpath(genpath(pwd)); % just temporally include all subfolders
 
+% add folders and subfolders: supporting_functions and supporting_data
+addpath(genpath('../../supporting_data/')); 
+addpath(genpath('../../supporting_functions'));
+
+% initial condition file
 ICfile = '2020.mat'
 
 t = 1:5:361;
