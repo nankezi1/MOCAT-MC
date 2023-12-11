@@ -3,9 +3,7 @@ MIT Orbital Capacity Assessment Toolbox - Monte Carlo
 MIT ARCLab's Monte-Carlo Tool for long-term propagation of the LEO environment
 
 ## Required modules
-MOCAT-MC is developed in MATLAB and requires the following toolboxes
-+ test1
-+ test2
+MOCAT-MC is developed in MATLAB.
 
 ## Tutorial
 A full tutorial with examples of usage is available on the [MIT ARCLab MOCAT website](https://arclab-mit.github.io/MOCAT_website/)
